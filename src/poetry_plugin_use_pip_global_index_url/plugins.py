@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from cleo.io.io import IO
+from poetry.config.config import Config
 from poetry.core.packages.package import Package
 from poetry.core.semver.version import Version
 from poetry.plugins.plugin import Plugin
@@ -8,6 +9,7 @@ from poetry.poetry import Poetry
 from poetry.repositories.legacy_repository import LegacyRepository
 from poetry.repositories.pypi_repository import PyPiRepository
 from subprocess import PIPE, Popen
+from poetry.repositories.repository_pool import Priority
 
 # Hopefully the default repo name never changes. It'd be nice if this value was
 # exposed in poetry as a constant.
@@ -33,19 +35,43 @@ class UsePipGlobalIndexUrlPlugin(Plugin):
         # It would be nice to print something out to say that we're using the index
         # at the url specified in pip config, but printing things here interferes with
         # outputs from other poetry commands.
-        for idx, repo in enumerate(poetry.pool.repositories):
-            if repo.name == DEFAULT_REPO_NAME and isinstance(repo, PyPiRepository):
-                # We preserve the ordering of poetry.pool.repositories to
-                # maintain repository precedence
-                poetry.pool.repositories[idx] = SourceStrippedLegacyRepository(
-                    DEFAULT_REPO_NAME,
-                    pip_global_index_url,
-                    config=poetry.config,
-                    disable_cache=repo._disable_cache,
-                )
+
+        # All keys are lowercased in public functions
+        repo_key = DEFAULT_REPO_NAME.lower()
+
+        pypi_prioritized_repository = poetry.pool._repositories.get(repo_key)
+
+        if pypi_prioritized_repository is None or not isinstance(
+            pypi_prioritized_repository.repository, PyPiRepository
+        ):
+            return
+
+        replacement_repository = SourceStrippedLegacyRepository(
+            DEFAULT_REPO_NAME,
+            pip_global_index_url,
+            config=poetry.config,
+            disable_cache=pypi_prioritized_repository.repository._disable_cache,
+        )
+
+        priority = pypi_prioritized_repository.priority
+
+        poetry.pool.remove_repository(DEFAULT_REPO_NAME)
+        poetry.pool.add_repository(
+            repository=replacement_repository,
+            default=priority == Priority.DEFAULT,
+            secondary=priority == Priority.SECONDARY,
+        )
 
 
 class SourceStrippedLegacyRepository(LegacyRepository):
+    def __init__(
+        self,
+        name: str,
+        url: str,
+        config: Config | None = None,
+        disable_cache: bool = False,
+    ) -> None:
+        super().__init__(name, url, config, disable_cache)
     # Packages sourced from PyPiRepository repositories *do not* include their
     # source data in poetry.lock. This is unique to PyPiRepository. Packages
     # sourced from LegacyRepository repositories *do* include their source data
