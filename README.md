@@ -31,6 +31,16 @@ they want to contribute their changes back to the project. This is suboptimal.
 
 Follow poetry's [plugin installation instructions](https://python-poetry.org/docs/master/plugins/#using-plugins), replacing `poetry-plugin` with `poetry-plugin-use-pip-global-index-url`.
 
+## Compatibility
+
+_poetry-plugin-pypi-mirror_ depends on poetry internals which can change between
+poetry releases. It's important to ensure compatibility between the poetry
+version in use and the plugin version in use.
+
+| Poetry version(s) | Compatible plugin version(s) |
+| ----------------- | ---------------------------- |
+| ~1.3.0            | ^0.2.0                       |
+| ~1.2.1            | < 0.2.0                      |
 
 ## See also
 
